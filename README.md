@@ -12,6 +12,7 @@ The longer term goals are to use the individual hieroglyph images to create a ma
 
 * [Python 3.8.5](https://www.python.org/) 
 * [Numpy 1.19.2](https://numpy.org/install/)
+* [Matplotlib 3.3.2](https://matplotlib.org/3.3.2/users/installing.html)
 
 ## Usage
 
