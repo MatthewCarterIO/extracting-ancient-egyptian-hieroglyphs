@@ -118,8 +118,13 @@ while True:
     hough_lines_img = orig_img.copy()
     if lines is not None:
         for line in lines:
+            # Only plot horizontal and vertical lines. Lines won't be exactly horizontal/vertical (i.e. x1 != x2 and
+            # y1 != y2) but within tolerance. If x1 and x2 are within tolerance, the line is considered vertical. If
+            # y1 and y2 are within tolerance, the line is considered horizontal.
+            tolerance = 20
             x1, y1, x2, y2 = line[0]
-            cv2.line(hough_lines_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            if x1 - tolerance <= x2 <= x1 + tolerance or y1 - tolerance <= y2 <= y1 + tolerance:
+                cv2.line(hough_lines_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
             # TODO: If needed for future param alterations filter out all lines that aren't in region of 0 rads
             #  (horizontal) and 1.57 rads (vertical)
             # TODO: If needed check distances in x and y direction between lines, so only those bordering hieroglyphs
