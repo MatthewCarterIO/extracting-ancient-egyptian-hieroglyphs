@@ -2,19 +2,73 @@
     File name: egyptian_hieroglyph_extractor.py
     Author: Matthew Carter
     Date created: 17/08/2020
-    Date last modified: 18/01/2021
+    Date last modified: 21/01/2021
     Python Version: 3.8
+
+    An update dedicated to Peanut the mouse, for being an incredible little fighter.
 """
 
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Read in image and convert it into greyscale.
+
+# Global variables.
+# List to store coordinates of user defined area in image to remove.
+selected_area_vertices = []
+
+
+# Mouse callback function to mark and save the coordinates of where the user has clicked on the image.
+def outline_area_callback(event, x, y, flags, param):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        # Mark point where user has clicked.
+        cv2.circle(drawing_img, (x, y), 4, (0, 0, 0), -1)
+        # Save click point x,y coordinates as a tuple into a list.
+        selected_area_vertices.append((x, y))
+    if event == cv2.EVENT_RBUTTONDOWN:
+        # Clear coordinates in current selection to allow user to restart selection.
+        clear_selected_area_vertices()
+        print("Current selection cleared. Restart selecting.")
+
+
+# Function to ask user if they wish to mark out a region on an image.
+def request_user_input():
+    while True:
+        response = input("Mark out a region to remove from the image? (y/n): ").lower()
+        if response in ["y", "n"]:
+            # Valid response provided.
+            if response == "n":
+                return False
+            else:
+                return True
+
+
+# Function to draw and fill an area using the coordinates of vertices chosen by the user through their mouse clicks.
+def draw_fill_area(image, vertices_list):
+    # If there are three or more vertices in the list, draw and fill area.
+    if len(vertices_list) > 2:
+        cv2.fillPoly(image, np.array([vertices_list], np.int32), (0, 0, 0))
+    else:
+        print("Not enough points selected to draw area.")
+    # Clear coordinates list of what has been drawn or couldn't be drawn due to insufficient points.
+    clear_selected_area_vertices()
+
+
+# Function to clear selected area vertices list.
+def clear_selected_area_vertices():
+    selected_area_vertices.clear()
+
+
+# On change function for trackbar.
+def custom_on_change(x):
+    pass
+
+
+# Read in the image.
 orig_img = cv2.imread("sample_hieroglyphs.jpg")
 # cv2.imshow("Original", orig_img)
 
-# Scale the image to ensure the photo is 800 pixels in width while maintaining its aspect ratio.
+# Scale the image to ensure it is 800 pixels in width while maintaining its aspect ratio.
 img_height, img_width, img_channels = orig_img.shape
 scale = 800 / img_width
 width = int(img_width * scale)
@@ -25,6 +79,30 @@ scaled_img = cv2.resize(orig_img, (width, height), interpolation=cv2.INTER_AREA)
 # Convert image to greyscale.
 grey_img = cv2.cvtColor(scaled_img, cv2.COLOR_BGR2GRAY)
 # cv2.imshow("Grey", grey_img)
+
+# Create a window and bind the mouse callback function to it.
+cv2.namedWindow("Area Selection")
+cv2.setMouseCallback("Area Selection", outline_area_callback)
+# Create an image on which to mark out areas.
+drawing_img = grey_img.copy()
+# Use the mouse click callback function to mark out areas that are not of interest in the image.
+continue_highlighting = True
+while continue_highlighting:
+    # Check whether the user wishes to mark out an area.
+    if request_user_input() is False:
+        # User chose not to mark out area.
+        continue_highlighting = False
+    else:
+        # User chose to mark out area.
+        while True:
+            # Wait 10ms for the spacebar key (ASCII code 32) to be pressed. If pressed break out of loop.
+            key_pressed = cv2.waitKey(10) & 0xFF
+            if key_pressed == 32:
+                break
+            cv2.imshow("Area Selection", drawing_img)
+        # Draw marked out area.
+        draw_fill_area(grey_img, selected_area_vertices)
+cv2.imshow("Area Of Interest", grey_img)
 
 # Apply Gaussian blur to reduce noise in the image.
 blurred_img = cv2.GaussianBlur(grey_img, (5, 5), 0)
@@ -95,11 +173,6 @@ cv2.imshow("closing", closing_img)
 # Create a window to hold the trackbars and image.
 cv2.namedWindow("Hough")
 
-
-def custom_on_change(x):
-    pass
-
-
 # Create trackbars that can be used to adjust Hough transform parameters.
 cv2.createTrackbar("min_line_length", "Hough", 150, 300, custom_on_change)
 cv2.createTrackbar("max_line_gap", "Hough", 150, 300, custom_on_change)
@@ -107,10 +180,12 @@ cv2.createTrackbar("threshold", "Hough", 150, 300, custom_on_change)
 # # Create trackbar providing a tolerance value for use in ensuring only horizontal/vertical Hough lines are plotted.
 # cv2.createTrackbar("tolerance", "Hough", 10, 20, custom_on_change)
 
+# Initiate the Hough image.
+hough_lines_img = scaled_img.copy()
+
 while True:
-    # Wait 1ms for a ESC key (ASCII code 27) to be pressed (0 param would leave it waiting for infinity). If pressed
-    # break out of loop.
-    key_pressed = cv2.waitKey(1) & 0xFF
+    # Wait 10ms for the ESC key (ASCII code 27) to be pressed. If pressed break out of loop.
+    key_pressed = cv2.waitKey(10) & 0xFF
     if key_pressed == 27:
         break
 
@@ -126,9 +201,10 @@ while True:
     lines = cv2.HoughLinesP(closing_img, rho=1, theta=np.pi/180, threshold=threshold, minLineLength=min_line_length,
                             maxLineGap=max_line_gap)
 
-    # Plot only the horizontal and vertical Hough lines (if there are any) on a copy of the scaled colour image. Lines
-    # are unlikely to be exactly horizontal/vertical (i.e. x1 != x2 and y1 != y2) but are assumed to be if within a
-    # tolerance value (in pixels). If x1 and x2 are within tolerance the line is considered vertical. If y1 and y2 are
+    # Plot only the horizontal and vertical Hough lines (if there are any) on a copy of the scaled colour image. With
+    # each loop, the Hough lines image is reset to a clean scaled image with no lines on it before plotting again.
+    # Lines are unlikely to be exactly horizontal/vertical (i.e. x1 != x2 and y1 != y2) but are assumed to be if within
+    # a tolerance value (in pixels). If x1 and x2 are within tolerance the line is considered vertical. If y1 and y2 are
     # within tolerance the line is considered horizontal.
     hough_lines_img = scaled_img.copy()
     if lines is not None:
@@ -137,15 +213,13 @@ while True:
             x1, y1, x2, y2 = line[0]
             if x1 - tolerance <= x2 <= x1 + tolerance or y1 - tolerance <= y2 <= y1 + tolerance:
                 cv2.line(hough_lines_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                # TODO: If needed check distances in x and y direction between lines so only those bordering hieroglyphs
-                #  are drawn.
 
     # Show Hough lines.
     cv2.imshow("Hough", hough_lines_img)
 
+# Show final Hough lines image.
+cv2.imshow("Final Hough", hough_lines_img)
+cv2.waitKey(0)
+
 # Destroy all open windows.
 cv2.destroyAllWindows()
-
-
-# TODO: Contour features to bound each hieroglyph inside a rectangle for extraction?
-#  https://docs.opencv.org/master/dd/d49/tutorial_py_contour_features.html
