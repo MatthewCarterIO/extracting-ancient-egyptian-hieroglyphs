@@ -2,10 +2,10 @@
     File name: egyptian_hieroglyph_extractor.py
     Author: Matthew Carter
     Date created: 17/08/2020
-    Date last modified: 21/01/2021
+    Date last modified: 23/01/2021
     Python Version: 3.8
 
-    An update dedicated to Peanut the mouse, for being an incredible little fighter.
+    Dedicated to Peanut the mouse, for being an incredible little fighter.
 """
 
 import cv2
@@ -31,10 +31,10 @@ def outline_area_callback(event, x, y, flags, param):
         print("Current selection cleared. Restart selecting.")
 
 
-# Function to ask user if they wish to mark out a region on an image.
-def request_user_input():
+# Function to ask user a yes/no question.
+def request_user_input(question):
     while True:
-        response = input("Mark out a region to remove from the image? (y/n): ").lower()
+        response = input(question).lower()
         if response in ["y", "n"]:
             # Valid response provided.
             if response == "n":
@@ -86,12 +86,20 @@ cv2.setMouseCallback("Area Selection", outline_area_callback)
 # Create an image on which to mark out areas.
 drawing_img = grey_img.copy()
 # Use the mouse click callback function to mark out areas that are not of interest in the image.
-continue_highlighting = True
-while continue_highlighting:
+mark_out = True
+image_modified = False
+question_mark_out = "Mark out a region to remove from the image? (y/n): "
+question_save_image = "Save the modified image? (y/n): "
+while mark_out:
     # Check whether the user wishes to mark out an area.
-    if request_user_input() is False:
+    if request_user_input(question_mark_out) is False:
         # User chose not to mark out area.
-        continue_highlighting = False
+        mark_out = False
+        if image_modified is True:
+            # Check whether the user wishes to save the image with marked out areas.
+            if request_user_input(question_save_image) is True:
+                # Save image.
+                cv2.imwrite("area_of_interest.jpg", grey_img)
     else:
         # User chose to mark out area.
         while True:
@@ -100,8 +108,9 @@ while continue_highlighting:
             if key_pressed == 32:
                 break
             cv2.imshow("Area Selection", drawing_img)
-        # Draw marked out area.
+        # Draw marked out area and mark the image as being modified.
         draw_fill_area(grey_img, selected_area_vertices)
+        image_modified = True
 cv2.imshow("Area Of Interest", grey_img)
 
 # Apply Gaussian blur to reduce noise in the image.
