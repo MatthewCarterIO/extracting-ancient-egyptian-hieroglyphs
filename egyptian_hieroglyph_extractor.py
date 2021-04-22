@@ -2,7 +2,7 @@
     File name: egyptian_hieroglyph_extractor.py
     Author: Matthew Carter
     Date created: 17/08/2020
-    Date last modified: 21/04/2021
+    Date last modified: 22/04/2021
     Python Version: 3.8
 
     Dedicated to Peanut the mouse for being an incredible little fighter. Always.
@@ -13,15 +13,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# Mouse callback function to mark and save the coordinates of where the user has clicked on the image.
-def outline_area_callback(event, x, y, flags, param):
+# Mouse callback function to save the coordinates of where the user has clicked on the image.
+def select_point_callback(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
-        # Event is user pressing left mouse button.
-        # Save click point x,y coordinates as a tuple into a list.
+        # User presses left mouse button. Save click point x,y coordinates as a tuple into a list.
         selected_area_vertices.append((x, y))
     if event == cv2.EVENT_RBUTTONDOWN:
-        # Event is user pressing right mouse button.
-        # Clear coordinates in current selection to allow user to restart selection.
+        # User presses right mouse button. Clear coordinates in current selection to allow user to restart selection.
         clear_selected_area_vertices()
         print("Current selection cleared. Start again.")
 
@@ -52,6 +50,7 @@ def draw_fill_area(image, vertices_list):
 # Function to clear selected area vertices list.
 def clear_selected_area_vertices():
     selected_area_vertices.clear()
+    # TODO: When user clears exits selection, points on exclude_areas_img are currently not removed (since change made).
 
 
 # On change function for trackbar.
@@ -62,7 +61,7 @@ def custom_on_change(x):
 # Main function.
 def main():
     # Read in the image.
-    orig_img = cv2.imread("sample_hieroglyphs_3.jpg")
+    orig_img = cv2.imread("sample_hieroglyphs.jpg")
     # cv2.imshow("Original", orig_img)
 
     # Scale the image to ensure it is 1000 pixels in width while maintaining its aspect ratio.
@@ -80,36 +79,38 @@ def main():
     # Create a window in which the user can select areas of the image to exclude from analysis if desired and set the
     # mouse click callback function to be used within it.
     cv2.namedWindow("Exclude Area")
-    cv2.setMouseCallback("Exclude Area", outline_area_callback)
+    cv2.setMouseCallback("Exclude Area", select_point_callback)
     # Create an image on which the user will select areas to exclude.
     exclude_area_img = grey_img.copy()
-    # Ask user if they wish to start marking out areas and proceed according to response given.
-    mark_out = True
+    # Ask user if they wish to select any areas and proceed accordingly.
+    select_area = True
     image_modified = False
-    question_mark_out = "\nMark out a region to remove from the image?" \
-                        "\nInfo:" \
-                        "\nLeft mouse button - select vertices" \
-                        "\nRight mouse button - clear current vertices group selection" \
-                        "\nSpacebar - finish current vertices group selection / exit" \
-                        "\n(y/n): "
-    question_save_image = "\nSave the modified image? (y/n): "
-    while mark_out:
-        # Check whether the user wishes to mark out an area.
-        if ask_user(question_mark_out) is False:
-            # User chose not to mark out area.
-            mark_out = False
+    question_select_area = "\nSelect an area to remove " \
+                           "\nInfo:" \
+                           "\nLeft mouse button - select vertices" \
+                           "\nRight mouse button - clear current vertices group selection" \
+                           "\nSpacebar - finish current vertices group selection / exit" \
+                           "\n(y/n): "
+    question_proceed = "\nProceed using excluded areas? (y/n): "
+    while select_area:
+        # Check whether the user wishes to select an area.
+        if ask_user(question_select_area) is False:
+            # User chose not to select an area.
+            select_area = False
             if image_modified is True:
-                # Show user the modified image with all marked out areas and check whether the user wishes to save it.
+                # Show user the modified image with all excluded areas included.
+                print("\nReview excluded areas on image and press any key when done to continue.")
                 cv2.imshow("Area Of Interest", grey_img)
                 cv2.waitKey(0)
-                if ask_user(question_save_image) is True:
-                    # Save image.
-                    cv2.imwrite("area_of_interest.jpg", grey_img)
+                # Check whether the user wishes to proceed with the selected excluded areas.
+                if ask_user(question_proceed) is True:
+                    continue
                 else:
-                    # Reset grey image to its state before any marking out.
+                    # User chose not to use the excluded areas that were selected, so reset grey image to its state
+                    # before any selection was done.
                     grey_img = cv2.cvtColor(scaled_img, cv2.COLOR_BGR2GRAY)
         else:
-            # User chose to mark out area.
+            # User chose to select an area.
             while True:
                 # Wait 10ms for the spacebar key (ASCII code 32) to be pressed. If pressed break out of loop.
                 key_pressed = cv2.waitKey(10) & 0xFF
@@ -122,22 +123,22 @@ def main():
                     # Add the latest selected vertex to the image.
                     cv2.circle(exclude_area_img, (selected_area_vertices[-1][0], selected_area_vertices[-1][1]),
                                4, (0, 0, 0), -1)
-            # Draw marked out area from currently selected group of vertices onto grey image.
+            # Using current selection of vertices, draw excluded area onto grey image.
             draw_fill_area(grey_img, selected_area_vertices)
-            # Update excluded areas image to match the current grey image which shows all previously selected areas.
+            # Update excluded areas image to match the current grey image (which shows any previously selected areas).
             exclude_area_img = grey_img.copy()
             # Image has been modified.
             image_modified = True
-    # Show area of interest (whether or not areas have been excluded).
+    # Show area of interest (whether or not areas for exclusion were selected).
     cv2.imshow("Area Of Interest", grey_img)
 
-    # Due to the nature of how light interacts with carvings and how the shadows fall, the edges of hieroglyphs in images
-    # can be both light and dark. To obtain useful contours or Canny edges the majority of a hieroglyph edge must uniform.
-    # Create a mask for the image that allows all colours through except the high intensity whiter range and use it to
-    # replace those light edges in the same image with black pixels.
+    # Due to the nature of how light interacts with carvings and how the shadows fall, the edges of hieroglyphs in
+    # images can be both light and dark. To obtain useful contours or Canny edges the majority of a hieroglyph edge must
+    # be uniform. Create a mask for the image that allows all colours through except the high intensity whiter range and
+    # use it to replace those light edges in the same image with black pixels.
     light_mask = cv2.inRange(grey_img, 0, 210)
     mask_applied_img = cv2.bitwise_and(grey_img, grey_img, mask=light_mask)
-    # mask_applied_img = cv2.inRange(grey_img, 100, 210)   ################ Attempting to leave only black and white edges
+    # mask_applied_img = cv2.inRange(grey_img, 100, 210)   # TODO Perhaps leave only black and white edges?
     # cv2.imshow("Light Mask", light_mask)
     cv2.imshow("Mask Applied", mask_applied_img)
 
@@ -145,15 +146,15 @@ def main():
     blurred_img = cv2.GaussianBlur(mask_applied_img, (5, 5), 0)
     # cv2.imshow("Blurred", blurred_img)
 
-    # Apply adaptive thresholding. Use inv thresholding function to make hieroglyphs in foreground white which is desired by
-    # morphological transformations.
+    # Apply adaptive thresholding. Use inv thresholding function to make hieroglyphs in foreground white which is
+    # desired by morphological transformations.
     # thresh1_img = cv2.adaptiveThreshold(blurred_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 5)
     thresh2_img = cv2.adaptiveThreshold(blurred_img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 5)
     # cv2.imshow("adaptive_mean", thresh1_img)
     cv2.imshow("adaptive_gauss", thresh2_img)
 
-    # # Use Otsu's thresholding to establish an upper and lower threshold value for Canny edge detection. It works best on
-    # # bimodal images where the foreground is distinct from the background.
+    # Use Otsu's thresholding to establish an upper and lower threshold value for Canny edge detection. It works best on
+    # bimodal images where the foreground is distinct from the background.
     # ret3, thresh3_img = cv2.threshold(blurred_img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     # ret4, thresh4_img = cv2.threshold(blurred_img, 0, 255, cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
     # ret5, thresh5_img = cv2.threshold(blurred_img, 0, 255, cv2.THRESH_TRUNC+cv2.THRESH_OTSU)
@@ -167,7 +168,7 @@ def main():
     # lower_threshold = ret3 * 0.5  # Use for Canny edge if histogram method not used.
     # upper_threshold = ret3  # Use for Canny edge if histogram method not used.
 
-    # # Apply morphological transformation to the binary image created by thresholding.
+    # Apply morphological transformation to the binary image created by thresholding.
     # kernel = np.ones((3, 3), np.uint8)
     # erosion_img = cv2.erode(thresh1_img, kernel, iterations=1)
     # dilation_img = cv2.dilate(thresh1_img, kernel, iterations=1)
@@ -197,13 +198,15 @@ def main():
     # list and create a list for the histogram bins which represent pixel values 0-255.
     counts = [count for [count] in histogram]
     pixel_values = list(range(0, 256))
-    # Combine lists so count values are stored with their associated pixel values and sort it by counts in ascending order.
+    # Combine lists so count values are stored with their associated pixel values. Sort it by counts in ascending
+    # order.
     counts_values_combined = sorted(zip(counts, pixel_values))
     median_value_location = len(counts_values_combined) // 2
     # Tuples in counts_values_combined list are structured (count, pixel value).
     median_pixel_value = counts_values_combined[median_value_location][1]
-    # Calculate lower and upper threshold for Canny edge detection based on z-scores (0.66 and 1.33) which are the number
-    # of standard deviations from the mean (or in this case applied to the median as it is not as affected by extremes).
+    # Calculate lower and upper threshold for Canny edge detection based on z-scores (0.66 and 1.33) which are the
+    # number standard deviations from the mean (or in this case applied to the median as it is not as affected by
+    # extremes).
     lower_threshold = 0.66 * median_pixel_value
     upper_threshold = 1.33 * median_pixel_value
 
@@ -243,11 +246,11 @@ def main():
         lines = cv2.HoughLinesP(thresh2_img, rho=1, theta=np.pi/180, threshold=threshold, minLineLength=min_line_length,
                                 maxLineGap=max_line_gap)
 
-        # Plot only the horizontal and vertical Hough lines (if there are any) on a copy of the scaled colour image. With
-        # each loop, the Hough lines image is reset to a clean scaled image with no lines on it before plotting again.
-        # Lines are unlikely to be exactly horizontal/vertical (i.e. x1 != x2 and y1 != y2) but are assumed to be if within
-        # a tolerance value (in pixels). If x1 and x2 are within tolerance the line is considered vertical. If y1 and y2 are
-        # within tolerance the line is considered horizontal.
+        # Plot only the horizontal and vertical Hough lines (if there are any) on a copy of the scaled colour image.
+        # With each loop the Hough lines image is reset to a clean scaled image with no lines on it before plotting them
+        # again. Lines are unlikely to be exactly horizontal/vertical (i.e. x1 != x2 and y1 != y2) but are assumed to be
+        # if within a set tolerance value (in pixels). If x1 and x2 are within tolerance the line is considered
+        # vertical. If y1 and y2 are within tolerance the line is considered horizontal.
         hough_lines_img = scaled_img.copy()
         if lines is not None:
             for line in lines:
@@ -262,7 +265,7 @@ def main():
     # Show final Hough lines image.
     cv2.imshow("Final Hough", hough_lines_img)
 
-    # Wait for keypress then destroy all open windows.
+    # Wait for keypress then close all open windows.
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
